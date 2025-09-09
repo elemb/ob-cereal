@@ -76,6 +76,24 @@
     (:lineend . "\n"))
   "Default arguments for evaluating a UART block.")
 
+(defun ob-uart-ensure-number (value default)
+  "Ensure VALUE is a number, converting from string if necessary.
+Use DEFAULT if VALUE is nil."
+  (cond
+   ((numberp value) value)
+   ((stringp value) (string-to-number value))
+   ((null value) default)
+   (t default)))
+
+(defun ob-uart-ensure-string (value default)
+  "Ensure VALUE is a string, converting if necessary.
+Use DEFAULT if VALUE is nil."
+  (cond
+   ((stringp value) value)
+   ((numberp value) (number-to-string value))
+   ((null value) default)
+   (t default)))
+
 ;;;###autoload
 (defun org-babel-execute:uart (body params)
   "Execute a block of UART code with org-babel.
@@ -87,18 +105,18 @@ Argument PARAMS UART communication parameters."
          (ienc (cdr (assoc :ienc processed-params)))
          (oenc (cdr (assoc :oenc processed-params)))
          (port (cdr (assoc :port processed-params)))
-         (speed (string-to-number (or (cdr (assoc :speed processed-params)) "9600")))
-         (bytesize (string-to-number (or (cdr (assoc :bytesize processed-params)) "8")))
-         (parity (let ((p (cdr (assoc :parity processed-params))))
+         (speed (ob-uart-ensure-number (cdr (assoc :speed processed-params)) 9600))
+         (bytesize (ob-uart-ensure-number (cdr (assoc :bytesize processed-params)) 8))
+         (parity (let ((p (ob-uart-ensure-string (cdr (assoc :parity processed-params)) "")))
                    (cond ((string= p "odd") 'odd)
                          ((string= p "even") 'even)
                          (t nil))))
-         (stopbits (string-to-number (or (cdr (assoc :stopbits processed-params)) "1")))
-         (flowcontrol (let ((fc (cdr (assoc :flowcontrol processed-params))))
+         (stopbits (ob-uart-ensure-number (cdr (assoc :stopbits processed-params)) 1))
+         (flowcontrol (let ((fc (ob-uart-ensure-string (cdr (assoc :flowcontrol processed-params)) "")))
                         (cond ((string= fc "hw") 'hw)
                               ((string= fc "sw") 'sw)
                               (t nil))))
-         (timeout (string-to-number (or (cdr (assoc :timeout processed-params)) "1")))
+         (timeout (ob-uart-ensure-number (cdr (assoc :timeout processed-params)) 1))
          (lineend (or (cdr (assoc :lineend processed-params)) "\n"))
          (process-name (format "ob-uart-%s" (replace-regexp-in-string "/" "-" port)))
          (process-buffer (format "*ob-uart-%s*" (replace-regexp-in-string "/" "-" port))))
