@@ -3,7 +3,7 @@
 ;; Author: Andreas Müller
 ;; Keywords: tools, comm, org-mode, UART, literate programming, reproducible development
 ;; Homepage: https://www.0x7.ch
-;; Version: 0.0.1
+;; Version: 0.0.2
 ;; code inspired by ob-restclient.el - https://github.com/alf/ob-restclient.el
 
 ;;; License:
@@ -38,61 +38,68 @@
 
 (defcustom ob-uart-debug t
   "Whether to show debug messages for UART communication."
-  :package-version '(ob-uart . "0.0.1")
+  :package-version '(ob-uart . "0.0.2")
   :group 'ob-uart
   :type 'boolean)
 
 (defun ob-uart-detect-default-port ()
   "Detect default serial port based on operating system."
-  (cond
-   ((eq system-type 'darwin)
-    ;; macOS - look for USB serial devices
-    (let ((ports (append (directory-files "/dev" nil "cu\\.usbmodem.*")
-                        (directory-files "/dev" nil "cu\\.usbserial.*"))))
-      (if ports
-          (concat "/dev/" (car ports))
-        "/dev/cu.usbmodem")))
-   ((eq system-type 'gnu/linux)
-    ;; Linux
-    (let ((ports (append (directory-files "/dev" nil "ttyUSB.*")
-                        (directory-files "/dev" nil "ttyACM.*"))))
-      (if ports
-          (concat "/dev/" (car ports))
-        "/dev/ttyUSB0")))
-   (t
-    ;; Default fallback
-    "/dev/ttyUSB0")))
+  (condition-case nil
+      (cond
+       ((eq system-type 'darwin)
+        (let ((ports (append (file-expand-wildcards "/dev/cu.usbmodem*")
+                            (file-expand-wildcards "/dev/cu.usbserial*"))))
+          (if ports (car ports) "/dev/cu.usbmodem01")))
+       ((eq system-type 'gnu/linux)
+        (let ((ports (append (file-expand-wildcards "/dev/ttyUSB*")
+                            (file-expand-wildcards "/dev/ttyACM*"))))
+          (if ports (car ports) "/dev/ttyUSB0")))
+       (t "/dev/ttyUSB0"))
+    (error "/dev/ttyUSB0")))
 
 (defvar org-babel-default-header-args:uart
   `((:ienc . "raw")
     (:oenc . "raw")
-    (:port . ,(ob-uart-detect-default-port))
-    (:speed . 9600)
-    (:bytesize . 8)
-    (:parity . nil)
-    (:stopbits . 1)
-    (:flowcontrol . nil)
-    (:timeout . 1)
+    (:port . "/dev/cu.usbmodem01")
+    (:speed . "9600")
+    (:bytesize . "8")
+    (:parity . "")
+    (:stopbits . "1")
+    (:flowcontrol . "")
+    (:timeout . "2")
     (:lineend . "\n"))
   "Default arguments for evaluating a UART block.")
 
-(defun ob-uart-ensure-number (value default)
-  "Ensure VALUE is a number, converting from string if necessary.
-Use DEFAULT if VALUE is nil."
-  (cond
-   ((numberp value) value)
-   ((stringp value) (string-to-number value))
-   ((null value) default)
-   (t default)))
+(defun ob-uart-safe-string-to-number (val default)
+  "Safely convert VAL to number, return DEFAULT if conversion fails."
+  (condition-case nil
+      (cond
+       ((numberp val) val)
+       ((and (stringp val) (not (string-empty-p val)))
+        (string-to-number val))
+       (t default))
+    (error default)))
 
-(defun ob-uart-ensure-string (value default)
-  "Ensure VALUE is a string, converting if necessary.
-Use DEFAULT if VALUE is nil."
-  (cond
-   ((stringp value) value)
-   ((numberp value) (number-to-string value))
-   ((null value) default)
-   (t default)))
+(defun ob-uart-safe-string (val default)
+  "Safely convert VAL to string, return DEFAULT if nil or empty."
+  (condition-case nil
+      (cond
+       ((and (stringp val) (not (string-empty-p val))) val)
+       ((numberp val) (number-to-string val))
+       (t default))
+    (error default)))
+
+(defun ob-uart-cleanup-process (process-name process-buffer)
+  "Clean up existing UART process and buffer safely."
+  (condition-case nil
+      (progn
+        (when-let ((proc (get-process process-name)))
+          (when (process-live-p proc)
+            (delete-process proc))
+          (sit-for 0.1))
+        (when-let ((buf (get-buffer process-buffer)))
+          (kill-buffer buf)))
+    (error nil)))
 
 ;;;###autoload
 (defun org-babel-execute:uart (body params)
@@ -101,94 +108,115 @@ This function is called by `org-babel-execute-src-block'
 Argument BODY content to send.
 Argument PARAMS UART communication parameters."
   (message "executing UART source code block")
-  (let* ((processed-params (org-babel-process-params params))
-         (ienc (cdr (assoc :ienc processed-params)))
-         (oenc (cdr (assoc :oenc processed-params)))
-         (port (cdr (assoc :port processed-params)))
-         (speed (ob-uart-ensure-number (cdr (assoc :speed processed-params)) 9600))
-         (bytesize (ob-uart-ensure-number (cdr (assoc :bytesize processed-params)) 8))
-         (parity (let ((p (ob-uart-ensure-string (cdr (assoc :parity processed-params)) "")))
-                   (cond ((string= p "odd") 'odd)
-                         ((string= p "even") 'even)
-                         (t nil))))
-         (stopbits (ob-uart-ensure-number (cdr (assoc :stopbits processed-params)) 1))
-         (flowcontrol (let ((fc (ob-uart-ensure-string (cdr (assoc :flowcontrol processed-params)) "")))
-                        (cond ((string= fc "hw") 'hw)
-                              ((string= fc "sw") 'sw)
-                              (t nil))))
-         (timeout (ob-uart-ensure-number (cdr (assoc :timeout processed-params)) 1))
-         (lineend (or (cdr (assoc :lineend processed-params)) "\n"))
-         (process-name (format "ob-uart-%s" (replace-regexp-in-string "/" "-" port)))
-         (process-buffer (format "*ob-uart-%s*" (replace-regexp-in-string "/" "-" port))))
-    
-    ;; Clean up any existing process and buffer
-    (when (get-process process-name)
-      (delete-process process-name))
-    (when (get-buffer process-buffer)
-      (kill-buffer process-buffer))
-    
-    ;; Create the serial process
-    (let ((proc (make-serial-process
-                 :name process-name
-                 :buffer process-buffer
-                 :port port
-                 :speed speed
-                 :bytesize bytesize
-                 :parity parity
-                 :stopbits stopbits
-                 :flowcontrol flowcontrol
-                 :filter 'ob-uart-listen-filter)))
-      
-      ;; Process input encoding
-      (when (string= "hex" ienc)
-        (setq body (mapconcat 
-                   (lambda (x) 
-                     (char-to-string (string-to-number x 16))) 
-                   (split-string body) "")))
-      
-      ;; Send the command
-      (process-send-string proc (concat body lineend))
-      
-      ;; Clear buffer and wait for response
-      (with-current-buffer process-buffer
-        (erase-buffer))
-      (sleep-for timeout)
-      
-      ;; Get result
-      (let ((result ""))
-        (with-current-buffer process-buffer
-          (setq result (buffer-string)))
+  (condition-case err
+      (let* ((processed-params (org-babel-process-params params))
+             (ienc (ob-uart-safe-string (cdr (assoc :ienc processed-params)) "raw"))
+             (oenc (ob-uart-safe-string (cdr (assoc :oenc processed-params)) "raw"))
+             (port (ob-uart-safe-string (cdr (assoc :port processed-params)) "/dev/cu.usbmodem01"))
+             (speed (ob-uart-safe-string-to-number (cdr (assoc :speed processed-params)) 9600))
+             (bytesize (ob-uart-safe-string-to-number (cdr (assoc :bytesize processed-params)) 8))
+             (parity-str (ob-uart-safe-string (cdr (assoc :parity processed-params)) ""))
+             (parity (cond ((string= parity-str "odd") 'odd)
+                          ((string= parity-str "even") 'even)
+                          (t nil)))
+             (stopbits (ob-uart-safe-string-to-number (cdr (assoc :stopbits processed-params)) 1))
+             (flowcontrol-str (ob-uart-safe-string (cdr (assoc :flowcontrol processed-params)) ""))
+             (flowcontrol (cond ((string= flowcontrol-str "hw") 'hw)
+                               ((string= flowcontrol-str "sw") 'sw)
+                               (t nil)))
+             (timeout (ob-uart-safe-string-to-number (cdr (assoc :timeout processed-params)) 2))
+             (lineend (ob-uart-safe-string (cdr (assoc :lineend processed-params)) "\n"))
+             (safe-port (replace-regexp-in-string "[^a-zA-Z0-9]" "-" port))
+             (process-name (format "ob-uart-%s" safe-port))
+             (process-buffer (format "*ob-uart-%s*" safe-port)))
         
-        ;; Clean up
-        (delete-process proc)
-        (kill-buffer process-buffer)
+        ;; Clean up any existing process and buffer
+        (ob-uart-cleanup-process process-name process-buffer)
         
-        ;; Process output encoding
-        (when (string= "hex" oenc)
-          (setq result (mapconcat (lambda (x) (format "%02x" x)) 
-                                 (string-to-list result) " ")))
-        (when (string= "HEX" oenc)
-          (setq result (mapconcat (lambda (x) (format "%02X" x)) 
-                                 (string-to-list result) " ")))
+        ;; Validate port exists (on macOS)
+        (when (and (eq system-type 'darwin) (not (file-exists-p port)))
+          (error "Serial port %s does not exist" port))
         
-        ;; Format result
-        (with-temp-buffer
-          (insert result)
-          (when (not (string= "raw" oenc))
-            (fill-region (point-min) (point-max)))
-          (buffer-string))))))
+        ;; Process input encoding
+        (when (string= "hex" ienc)
+          (setq body (mapconcat 
+                     (lambda (x) 
+                       (char-to-string (string-to-number x 16))) 
+                     (split-string body) "")))
+        
+        ;; Create the serial process with error handling
+        (let ((proc (condition-case proc-err
+                        (make-serial-process
+                         :name process-name
+                         :buffer process-buffer
+                         :port port
+                         :speed speed
+                         :bytesize bytesize
+                         :parity parity
+                         :stopbits stopbits
+                         :flowcontrol flowcontrol
+                         :noquery t
+                         :filter 'ob-uart-listen-filter)
+                      (error
+                       (error "Failed to create serial process: %s" (error-message-string proc-err))))))
+          
+          ;; Give process time to initialize
+          (sit-for 0.1)
+          
+          ;; Clear buffer before sending
+          (with-current-buffer process-buffer
+            (erase-buffer))
+          
+          ;; Send the command
+          (process-send-string proc (concat body lineend))
+          
+          ;; Wait for response with proper timeout handling
+          (let ((start-time (current-time))
+                (result ""))
+            (while (and (< (float-time (time-subtract (current-time) start-time)) timeout)
+                       (process-live-p proc))
+              (sit-for 0.1))
+            
+            ;; Get result
+            (condition-case nil
+                (with-current-buffer process-buffer
+                  (setq result (buffer-string)))
+              (error (setq result "")))
+            
+            ;; Clean up process and buffer
+            (ob-uart-cleanup-process process-name process-buffer)
+            
+            ;; Process output encoding
+            (when (string= "hex" oenc)
+              (setq result (mapconcat (lambda (x) (format "%02x" x)) 
+                                     (string-to-list result) " ")))
+            (when (string= "HEX" oenc)
+              (setq result (mapconcat (lambda (x) (format "%02X" x)) 
+                                     (string-to-list result) " ")))
+            
+            ;; Return formatted result
+            (if (string-empty-p result)
+                "No response received"
+              result))))
+    (error
+     (format "UART execution error: %s" (error-message-string err)))))
 
 (defun ob-uart-listen-filter (proc string)
   "Filter to process response.
 Argument PROC process.
 Argument STRING response string."
   (when ob-uart-debug
-    (message (format "ob-uart got %d bytes" (length string))))
-  (with-current-buffer (process-buffer proc)
-    (insert string)))
+    (message "ob-uart received: %d bytes" (length string)))
+  (condition-case nil
+      (when (process-buffer proc)
+        (with-current-buffer (process-buffer proc)
+          (goto-char (point-max))
+          (insert string)))
+    (error nil)))
 
-;; Add uart to the list of supported languages
-(add-to-list 'org-babel-load-languages '(uart . t))
+;; Ensure uart is in the supported languages list
+(eval-after-load 'org
+  '(add-to-list 'org-babel-load-languages '(uart . t)))
 
 (provide 'ob-uart)
 ;;; ob-uart.el ends here
