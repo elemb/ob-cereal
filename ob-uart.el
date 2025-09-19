@@ -5,16 +5,22 @@
 
 (defvar org-babel-default-header-args:uart
   '((:port . "/dev/cu.usbmodem01")
-    (:speed . "115200")
-    (:timeout . "1")
+    (:speed . 115200)
+    (:timeout . 1)
     (:lineend . "\n"))
   "Default arguments for UART blocks.")
 
 (defun org-babel-execute:uart (body params)
   "Execute UART command BODY with PARAMS."
   (let* ((port (or (cdr (assoc :port params)) "/dev/cu.usbmodem01"))
-         (speed (string-to-number (or (cdr (assoc :speed params)) "115200")))
-         (timeout (string-to-number (or (cdr (assoc :timeout params)) "1")))
+         (speed-param (cdr (assoc :speed params)))
+         (speed (cond ((numberp speed-param) speed-param)
+                      ((stringp speed-param) (string-to-number speed-param))
+                      (t 115200)))
+         (timeout-param (cdr (assoc :timeout params)))
+         (timeout (cond ((numberp timeout-param) timeout-param)
+                        ((stringp timeout-param) (string-to-number timeout-param))
+                        (t 1)))
          (lineend (or (cdr (assoc :lineend params)) "\n"))
          (proc-name (format "uart-%d" (random 10000)))
          (buffer-name (format "*%s*" proc-name)))
