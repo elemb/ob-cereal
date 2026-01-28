@@ -64,7 +64,7 @@
 (defun ob-uart--normalize-params (params)
   (cl-labels
       ((sym (v)
-            (pcase (and v (downcase (format "%s" v)))
+            (pcase (and v (if (stringp v) (downcase v) v))
               ((or "none" "nil") nil)
               ("even" 'even)
               ("odd"  'odd)
@@ -88,7 +88,6 @@
      :wait-for (cdr (assoc :wait-for params))
      :ienc (cdr (assoc :ienc params))
      :oenc (cdr (assoc :oenc params)))))
-
 
 (defun ob-uart--open (p)
   (make-serial-process
