@@ -64,25 +64,31 @@
 (defun ob-uart--normalize-params (params)
   (cl-labels
       ((sym (v)
-            (pcase (and v (downcase v))
+            (pcase (and v (downcase (format "%s" v)))
               ((or "none" "nil") nil)
               ("even" 'even)
               ("odd"  'odd)
               ("hardware" 'hardware)
               ("software" 'software)
-              (_ nil))))
+              (_ nil)))
+       (num (v)
+            (cond
+             ((numberp v) v)
+             ((stringp v) (string-to-number v))
+             (t 0))))
     (list
      :port (cdr (assoc :port params))
-     :speed (string-to-number (cdr (assoc :speed params)))
-     :bytesize (string-to-number (cdr (assoc :bytesize params)))
+     :speed (num (cdr (assoc :speed params)))
+     :bytesize (num (cdr (assoc :bytesize params)))
      :parity (sym (cdr (assoc :parity params)))
-     :stopbits (string-to-number (cdr (assoc :stopbits params)))
+     :stopbits (num (cdr (assoc :stopbits params)))
      :flowcontrol (sym (cdr (assoc :flowcontrol params)))
-     :timeout (string-to-number (cdr (assoc :timeout params)))
+     :timeout (num (cdr (assoc :timeout params)))
      :lineend (cdr (assoc :lineend params))
      :wait-for (cdr (assoc :wait-for params))
      :ienc (cdr (assoc :ienc params))
      :oenc (cdr (assoc :oenc params)))))
+
 
 (defun ob-uart--open (p)
   (make-serial-process
