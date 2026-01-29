@@ -16,7 +16,7 @@ Perfect for:
 
 * Status 2026
 
-The original repo[](https://github.com/elemb/ob-uart) seems abandoned for many years.
+The original repo[](https://github.com/andrmuel/ob-uart) seems abandoned for many years.
 
 This fork (renamed to ob-cereal) contains **critical fixes** that make it actually work in modern Emacs / Doom Emacs:
 - proper handling of numeric parameters (:speed, :bytesize, etc.) — Org passes numbers as numbers, not strings
