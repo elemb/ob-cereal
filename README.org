@@ -1,4 +1,4 @@
-#+TITLE: ob-uart – Literate UART / serial communication in Org-mode
+#+TITLE: ob-cereal – Literate UART / serial communication in Org-mode
 #+AUTHOR: (your name / original Andreas Müller + elemb + your improvements)
 #+LANGUAGE: en
 
