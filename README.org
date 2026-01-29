@@ -25,7 +25,7 @@ Perfect for:
 
 The original repo (https://github.com/andrmuel/ob-uart) seems abandoned for many years.
 
-This fork (renamed to ob-cereal) contains **critical fixes** that make it actually work in modern Emacs / Doom Emacs:
+This fork (renamed to ob-cereal) contains fixes that help it work in modern Emacs / Doom Emacs:
 - proper handling of numeric parameters (:speed, :bytesize, etc.) — Org passes numbers as numbers, not strings
 - symbol → string conversion for header args that are written without quotes
 - removal of control characters from output (^F, ^M, other garbage)
