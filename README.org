@@ -1,12 +1,12 @@
-#+TITLE: ob-cereal – Literate UART / serial communication in Org-mode
-#+AUTHOR: (your name / original Andreas Müller + elemb + your improvements)
+#+TITLE: ob-cereal – Literate serial communication in Org-mode
+#+AUTHOR: elemb (forked and fixed from Andreas Müller)
 #+LANGUAGE: en
 
 * What is this?
 
-ob-uart lets you talk to microcontrollers, sensors, Bus Pirate, or any serial device directly from Org-mode code blocks.
+ob-cereal lets you talk to microcontrollers, sensors, Bus Pirate, or any serial device directly from Org-mode code blocks.
 
-You write commands (Forth, AT commands, whatever) in =#+BEGIN_SRC uart= blocks → Org sends them over real UART → you get the reply as =#+RESULTS:=.
+You write commands (Forth, AT commands, whatever) in =#+BEGIN_SRC cereal= blocks → Org sends them over real serial → you get the reply as =#+RESULTS:=.
 
 Perfect for:
 - Literate embedded development / firmware REPL sessions
@@ -18,14 +18,14 @@ Perfect for:
 
 The original repo[](https://github.com/elemb/ob-uart) seems abandoned for many years.
 
-This fork contains **critical fixes** that make it actually work in modern Emacs / Doom Emacs:
+This fork (renamed to ob-cereal) contains **critical fixes** that make it actually work in modern Emacs / Doom Emacs:
 - proper handling of numeric parameters (:speed, :bytesize, etc.) — Org passes numbers as numbers, not strings
 - symbol → string conversion for header args that are written without quotes
 - removal of control characters from output (^F, ^M, other garbage)
 - cleaner defaults (115200 baud, \n line ending)
 - better process cleanup and timeout handling
 
-If you find this useful, feel free to fork again and rename to =ob-cereal= or similar.
+If you find this useful, feel free to fork and contribute!
 
 * Installation
 
@@ -34,8 +34,8 @@ If you find this useful, feel free to fork again and rename to =ob-cereal= or si
 1. In your =~/.doom.d/packages.el= (or =~/doom.d/packages.el=), add:
 
    #+begin_src emacs-lisp
-   (package! ob-uart
-     :recipe (:host github :repo "YOURUSERNAME/ob-uart" :files ("ob-uart.el")))
+   (package! ob-cereal
+     :recipe (:host github :repo "YOURUSERNAME/ob-cereal" :files ("ob-cereal.el")))
    #+end_src
 
    (replace YOURUSERNAME with your GitHub name after you fork & push the fixed version)
@@ -53,10 +53,10 @@ If you find this useful, feel free to fork again and rename to =ob-cereal= or si
 
    #+begin_src emacs-lisp
    (after! org
-     (require 'ob-uart)
+     (require 'ob-cereal)
      (org-babel-do-load-languages
       'org-babel-load-languages
-      '((uart . t)
+      '((cereal . t)
         ;; you probably also want your Forth language
         (forth . t))))
    #+end_src
@@ -65,19 +65,19 @@ If you find this useful, feel free to fork again and rename to =ob-cereal= or si
 
 6. Verify:
 
-   - =M-x eval-expression RET (featurep 'ob-uart) RET= → should return =t=
-   - =M-x eval-expression RET (fboundp 'org-babel-execute:uart) RET= → =t=
+   - =M-x eval-expression RET (featurep 'ob-cereal) RET= → should return =t=
+   - =M-x eval-expression RET (fboundp 'org-babel-execute:cereal) RET= → =t=
 
 ** Vanilla Emacs (without Doom)
 
 Add to your init file (~/.emacs.d/init.el or ~/.emacs):
 
 #+begin_src emacs-lisp
-(add-to-list 'load-path "/path/to/your/ob-uart-folder")
-(require 'ob-uart)
+(add-to-list 'load-path "/path/to/your/ob-cereal-folder")
+(require 'ob-cereal)
 (org-babel-do-load-languages
  'org-babel-load-languages
- '((uart . t)))
+ '((cereal . t)))
 #+end_src
 
 * Quick start – ZeptoForth example (macOS)
@@ -89,7 +89,7 @@ Find your port first:
 
 Basic block:
 
-#+BEGIN_SRC uart :port /dev/cu.usbmodem31401 :speed 115200 :bytesize 8 :parity none :stopbits 1 :flowcontrol none
+#+BEGIN_SRC cereal :port /dev/cu.usbmodem31401 :speed 115200 :bytesize 8 :parity none :stopbits 1 :flowcontrol none
 armv6m words-in
 #+END_SRC
 
@@ -102,7 +102,7 @@ You should see something like:
 
 Common minimal header (copy-paste friendly):
 
-#+BEGIN_SRC uart :port /dev/cu.usbmodem31401 :speed 115200 :parity none :flowcontrol none
+#+BEGIN_SRC cereal :port /dev/cu.usbmodem31401 :speed 115200 :parity none :flowcontrol none
 decimal 1 .
 #+END_SRC
 
@@ -127,11 +127,11 @@ Important: always give =:flowcontrol= a value (usually =none=). Leaving it blank
 
 - **Still getting =wrong-type-argument: stringp, 115200= ?**
   - Old byte-compiled version is cached.
-  - Fix: =rm -rf ~/.emacs.d/.local/straight/build-*/ob-uart= then =doom sync= again + full Emacs restart.
+  - Fix: =rm -rf ~/.emacs.d/.local/straight/build-*/ob-cereal= then =doom sync= again + full Emacs restart.
 
 - **No output or garbage (^F ^M etc.)**
   - The current version strips most control chars automatically.
-  - If you still see junk → enable debug: =(setq ob-uart-debug t)= and look at =*Messages*=.
+  - If you still see junk → enable debug: =(setq ob-cereal-debug t)= and look at =*Messages*=.
 
 - **Port not found**
   - macOS: =ls /dev/cu.*=
@@ -146,18 +146,18 @@ Important: always give =:flowcontrol= a value (usually =none=). Leaving it blank
 (kept from original README – works with the fixed version)
 
 - set mode to I²C, 50 kHz
-  #+BEGIN_SRC uart :port /dev/buspirate :speed 115200 :exports both
+  #+BEGIN_SRC cereal :port /dev/buspirate :speed 115200 :exports both
   m 4 2
   #+END_SRC
 
 - enable power & pull-ups
-  #+BEGIN_SRC uart :port /dev/buspirate :speed 115200
+  #+BEGIN_SRC cereal :port /dev/buspirate :speed 115200
   WP
   #+END_SRC
 
 - etc. (see original examples for SHT21 readout)
 
-* Why literate Forth + UART is powerful
+* Why literate Forth + serial is powerful
 
 You can now:
 
@@ -171,5 +171,3 @@ Enjoy — and happy hacking!
 * License
 
 Same as original: GPLv3+
-
-;;; ob-uart.el ends here
