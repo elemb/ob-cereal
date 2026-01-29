@@ -38,8 +38,6 @@ If you find this useful, feel free to fork and contribute!
      :recipe (:host github :repo "elemb/ob-cereal" :files ("ob-cereal.el")))
    #+end_src
 
-   (replace YOURUSERNAME with your GitHub name after you fork & push the fixed version)
-
 2. Run in terminal:
 
    #+begin_src sh
@@ -84,7 +82,7 @@ Add to your init file (~/.emacs.d/init.el or ~/.emacs):
 
 Find your port first:
 
-- macOS → usually =/dev/cu.usbmodem31401= or =/dev/cu.usbmodem*=
+- macOS → usually  =/dev/cu.usbmodem*= ( =/dev/cu.usbmodem31401= )
 - Linux → =/dev/ttyUSB0=, =/dev/ttyACM0=, etc.
 
 Basic block:
@@ -103,7 +101,9 @@ You should see something like:
 Common minimal header (copy-paste friendly):
 
 #+BEGIN_SRC cereal :port /dev/cu.usbmodem31401 :speed 115200 :parity none :flowcontrol none
-decimal 1 .
+: STAR ( -- ) 42 EMIT ;
+: STARS ( n -- ) 0 DO STAR LOOP ;
+7 stars
 #+END_SRC
 
 * Recommended header args
