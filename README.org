@@ -6,7 +6,11 @@
 
 ob-cereal lets you talk to microcontrollers, sensors, Bus Pirate, or any serial device directly from Org-mode code blocks.
 
-You write commands (Forth, I²CDriver (https://github.com/jamesbowman/i2cdriver) in =#+BEGIN_SRC cereal= blocks → Org sends them over real serial → you get the reply as =#+RESULTS:=.
+You write commands in 
+=#+BEGIN_SRC cereal= blocks → 
+→ Org sends them over real serial →
+→ you get the reply as 
+→ =#+RESULTS:=.
 
 Perfect for:
 - Literate embedded development / firmware REPL sessions
