@@ -95,9 +95,11 @@ Find your port first:
 Basic block:
 
 ~#+BEGIN_SRC cereal :port /dev/cu.usbmodem31401 :speed 115200 :parity none :flowcontrol none~
-~: STAR ( -- ) 42 EMIT ;~
-~: STARS ( n -- ) 0 DO STAR LOOP ;~
-~7 stars~
+#+BEGIN_SRC cereal :port /dev/cu.usbmodem31401 :speed 115200 :parity none :flowcontrol none
+: STAR ( -- ) 42 EMIT ;
+: STARS ( n -- ) 0 DO STAR LOOP ;
+7 stars
+#+END_SRC
 ~#+END_SRC~
 
 RESULTS:
