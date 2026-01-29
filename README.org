@@ -14,7 +14,7 @@ Perfect for:
 - Talking to Forth systems (ZeptoForth, Mecrisp-Stellaris, noForth, amforth, etc.)
 - I²CDriver (https://github.com/jamesbowman/i2cdriver
 - SPIDriver https://github.com/jamesbowman/spidriver
-- termdriver2 https://github.com/jamesbowman/termdriver2
+- TermDriver2 https://github.com/jamesbowman/termdriver2
 - Bus Pirate, FTDI adapters, etc.
 
 * Status 2026
