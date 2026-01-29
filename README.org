@@ -97,15 +97,16 @@ Basic block:
 ~#+BEGIN_SRC cereal :port /dev/cu.usbmodem31401 :speed 115200 :parity none :flowcontrol none~
 #+BEGIN_SRC cereal :port /dev/cu.usbmodem31401 :speed 115200 :parity none :flowcontrol none
 : STAR ( -- ) 42 EMIT ;
-: STARS ( n -- ) 0 DO STAR LOOP ;
+: STARS ( n -- ) 0 DO STAR SPACE LOOP ;
 7 stars
 #+END_SRC
 ~#+END_SRC~
 
 RESULTS:
 : : STAR ( -- ) 42 EMIT ;  ok
-: : STARS ( n -- ) 0 DO STAR LOOP ;  ok
-: 7 stars ******* ok
+: : STARS ( n -- ) 0 DO STAR SPACE LOOP ;  ok
+: 7 stars * * * * * * *  ok
+
 
 
 * Recommended header args (Mac)
