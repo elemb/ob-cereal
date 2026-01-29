@@ -4,7 +4,7 @@
 
 * What is this?
 
-ob-cereal lets you talk to microcontrollers, sensors, Bus Pirate, or any serial device directly from Org-mode code blocks.
+ob-cereal lets you talk to (probably) any serial device directly via org-mode code blocks.
 
 You write commands in 
 =#+BEGIN_SRC cereal= blocks → 
