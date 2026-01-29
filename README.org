@@ -15,7 +15,7 @@ You write commands in
 Perfect for:
 - Literate embedded development / firmware REPL sessions
 - Documenting hardware experiments
-- Talking to Forth systems (zeptoForth, Mecrisp-Stellaris, flashforth, ESP32Forth, etc.)
+- Talking to Forth systems (zeptoForth, Mecrisp-Stellaris, FlashForth, ESP32Forth, etc.)
 - I²CDriver (https://github.com/jamesbowman/i2cdriver
 - SPIDriver https://github.com/jamesbowman/spidriver
 - TermDriver2 https://github.com/jamesbowman/termdriver2
