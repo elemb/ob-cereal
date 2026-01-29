@@ -99,11 +99,11 @@ RESULTS:
 : 7 stars ******* ok
 
 
-* Recommended header args
+* Recommended header args (Mac)
 
 | Argument      | Typical value              | Meaning / Notes                                 |
 |---------------|----------------------------|-------------------------------------------------|
-| :port         | /dev/cu.usbmodem31401      | Required. Use quotes if name has spaces         |
+| :port         | /dev/cu.usbmodem*          | Required. Use quotes if name has spaces         |
 | :speed        | 115200                     | Baud rate (number, not string)                  |
 | :bytesize     | 8                          | Usually 8                                       |
 | :parity       | none / odd / even          | Usually none                                    |
