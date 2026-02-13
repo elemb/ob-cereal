@@ -21,17 +21,6 @@ Perfect for:
 - TermDriver2 https://github.com/jamesbowman/termdriver2
 - Bus Pirate, FTDI adapters, etc.
 
-* Status 2026
-
-The original repo (https://github.com/andrmuel/ob-uart) seems abandoned for many years.
-
-This fork (renamed to ob-cereal) contains fixes that help it work in modern Emacs / Doom Emacs:
-- proper handling of numeric parameters (:speed, :bytesize, etc.) — Org passes numbers as numbers, not strings
-- symbol → string conversion for header args that are written without quotes
-- removal of control characters from output (^F, ^M, other garbage)
-- cleaner defaults (115200 baud, \n line ending)
-- better process cleanup and timeout handling
-
 If you find this useful, feel free to fork and contribute!
 
 * Installation
