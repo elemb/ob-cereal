@@ -1,5 +1,5 @@
 ;;; ob-cereal.el --- org-babel support for serial communication
-;; Copyright (C) Andreas Müller
+;; Copyright (C) Loren Maxwell Butler
 ;; Original Author and Idea and 100% credit to: Andreas Müller
 ;; Revision Author: elemb
 ;; Keywords: tools, comm, org-mode, serial, literate programming, reproducible development
