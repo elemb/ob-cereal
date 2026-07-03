@@ -49,8 +49,15 @@
     (:timeout . 2)
     (:lineend . "\n")
     (:ienc . "raw")
-    (:oenc . "raw"))
-  "Default arguments for evaluating a cereal block.")
+    (:oenc . "raw")
+    (:wrap . "example"))
+  "Default arguments for evaluating a cereal block.
+
+:wrap defaults to \"example\" so multi-line results render as a
+#+begin_example/#+end_example fence rather than Org's default
+per-line \": \" fixed-width prefix, which is a pain to copy-paste
+out of. Override per-block with :wrap nil if you want the old
+behavior for some reason.")
 
 (defun ob-cereal--to-number (val default)
   "Convert VAL to number. If already number, return it. If string, convert. Else DEFAULT."
@@ -79,6 +86,14 @@
                        (t (intern s)))))
               (t nil))))
     (if (memq sym valid-syms) sym nil)))
+
+(defun ob-cereal--count-occurrences (needle haystack)
+  "Count non-overlapping occurrences of NEEDLE in HAYSTACK."
+  (let ((count 0) (start 0) (re (regexp-quote needle)))
+    (while (string-match re haystack start)
+      (setq count (1+ count))
+      (setq start (match-end 0)))
+    count))
 
 ;;;###autoload
 (defun org-babel-execute:cereal (body params)
@@ -131,16 +146,84 @@
                   ;; Send
                   (process-send-string proc (concat encoded-body lineend))
 
-                  ;; Wait (non-blocking)
-                  (let ((start (float-time)) (elapsed 0))
-                    (while (and (< elapsed timeout) (process-live-p proc))
-                      (accept-process-output proc 0.1 nil t)
-                      (setq elapsed (- (float-time) start))))
+                  ;; Expected prompt count: zeptoforth's REPL prints a
+                  ;; literal " ok\n" (do-prompt, in outer.s) once per input
+                  ;; line it finishes processing -- including blank lines,
+                  ;; confirmed on hardware. So the number of terminators we
+                  ;; can hope to see back is the number of newlines in what
+                  ;; we just sent. This is an upper bound, not a guarantee:
+                  ;; a parse error (unknown word) makes the REPL `abort'
+                  ;; past do-prompt for that one line, silently eating its
+                  ;; terminator -- confirmed on hardware, see the
+                  ;; bogus-word-that-does-not-exist test. So this count is
+                  ;; used only as a fast-path early exit below; it is never
+                  ;; the sole exit condition, and the idle-timeout loop
+                  ;; after it is what guarantees we always return even when
+                  ;; the count is never reached.
+                  (let ((expected-oks
+                         (let ((sent (concat encoded-body lineend)) (n 0) (i 0))
+                           (while (setq i (string-match "\n" sent i))
+                             (setq n (1+ n) i (1+ i)))
+                           n)))
+
+                    ;; Wait (non-blocking), idle-reset style: `timeout' is
+                    ;; how long the port must go QUIET before we give up,
+                    ;; not a fixed wall-clock budget for the whole block.
+                    ;; Every time new bytes show up we push the deadline
+                    ;; back out, so a device mid-loop that's still
+                    ;; producing output doesn't get cut off just because
+                    ;; the block has been running a while. A genuinely
+                    ;; dead port still closes in `timeout' seconds, same as
+                    ;; before, since silence means the buffer size never
+                    ;; changes.
+                    ;;
+                    ;; On top of that: after every poll we also count
+                    ;; literal " ok\n" terminators seen so far and break
+                    ;; immediately once that count reaches expected-oks --
+                    ;; the common, no-error case then returns as soon as
+                    ;; the block is actually done instead of waiting out a
+                    ;; full idle window afterward. If a parse error ate a
+                    ;; terminator, expected-oks is never reached and we
+                    ;; simply fall through to the idle-timeout above, which
+                    ;; still guarantees termination.
+                    ;;
+                    ;; Caveat: no absolute ceiling. A device stuck emitting
+                    ;; output forever (runaway loop) will hold the block
+                    ;; open forever too -- there's no backstop timer here
+                    ;; yet. Known tradeoff, not an oversight; add one if it
+                    ;; bites.
+                    (let ((idle-deadline (+ (float-time) timeout))
+                          (last-size (buffer-size (get-buffer proc-buf)))
+                          (ok-count 0)
+                          (done nil))
+                      (while (and (not done)
+                                  (process-live-p proc)
+                                  (< (float-time) idle-deadline))
+                        (accept-process-output proc 0.1 nil t)
+                        (let ((cur-size (buffer-size (get-buffer proc-buf))))
+                          (when (/= cur-size last-size)
+                            (setq last-size cur-size)
+                            (setq idle-deadline (+ (float-time) timeout))
+                            (setq ok-count
+                                  (let ((s (with-current-buffer proc-buf (buffer-string)))
+                                        (n 0) (i 0))
+                                    (while (setq i (string-match " ok\n" s i))
+                                      (setq n (1+ n) i (1+ i)))
+                                    n))
+                            (when (>= ok-count expected-oks)
+                              (setq done t)))))))
 
                   ;; Capture result
                   (setq result (with-current-buffer proc-buf (buffer-string)))
 
-                  ;; Strip control chars (keep \n and \t)
+                  ;; Strip ANSI CSI escape sequences (e.g. color codes from
+                  ;; zeptoforth's error console: ESC [ 31 ; 1 m ... ESC [ 0 m).
+                  ;; Must run before the generic control-char strip below,
+                  ;; which only eats the lone ESC byte and would otherwise
+                  ;; leave the printable payload ("[31;1m") behind as junk.
+                  (setq result (replace-regexp-in-string "\x1B\\[[0-9;]*[a-zA-Z]" "" result))
+
+                  ;; Strip remaining control chars (keep \n and \t)
                   (setq result (replace-regexp-in-string "[\x00-\x08\x0B-\x1F\x7F]" "" result))
 
                   ;; Optional hex output decoding
