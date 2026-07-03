@@ -1,155 +1,106 @@
-#+TITLE: ob-cereal – Literate serial communication in Org-mode
-#+AUTHOR: elemb (forked and fixed from Andreas Müller)
-#+LANGUAGE: en
+#+TITLE: ob-cereal
 
-* What is this?
+* ob-cereal
 
-ob-cereal lets you talk to (probably) any serial device directly via org-mode code blocks.
+Org-babel support for talking to a serial REPL from inside Org source blocks.
+Write an experiment in a =cereal= block, evaluate it, and the device's reply
+lands in the buffer as results. Built for interactive Forth systems such as
+[[https://github.com/tabemann/zeptoforth][zeptoforth]] and Mecrisp, but it will
+talk to anything that speaks over a serial port.
 
-You write commands in 
-=#+BEGIN_SRC cereal= blocks → 
-→ Org sends them over real serial →
-→ you get the reply as 
-→ =#+RESULTS:=.
+This is a fork of =ob-uart= by Andreas Müller; the original idea and the bulk of
+the design are his.
 
-Perfect for:
-- Literate embedded development / firmware REPL sessions
-- Documenting hardware experiments
-- Talking to Forth systems (zeptoForth, Mecrisp-Stellaris, FlashForth, ESP32Forth, etc.)
-- I²CDriver (https://github.com/jamesbowman/i2cdriver
-- SPIDriver https://github.com/jamesbowman/spidriver
-- TermDriver2 https://github.com/jamesbowman/termdriver2
-- Bus Pirate, FTDI adapters, etc.
+* Status
 
-If you find this useful, feel free to fork and contribute!
+Working. Each block evaluation is a single, self-contained transaction: open the
+port, send the block, read replies until a timeout, close the port. There is no
+persistent session — see [[*Caveats][Caveats]].
 
-* Installation
+* Requirements
 
-** Doom Emacs (recommended – this is how it was tested)
+- Emacs with Org
+- A serial device exposing a REPL (e.g. a Raspberry Pi Pico running a =full_usb=
+  zeptoforth image at 115200 baud, appearing as =/dev/ttyACM0= or
+  =/dev/cu.usbmodem*=)
 
-1. In your =~/.doom.d/packages.el= (or =~/doom.d/packages.el=), add:
+* Install
 
-   #+begin_src emacs-lisp
-   (package! ob-cereal
-     :recipe (:host github :repo "elemb/ob-cereal" :files ("ob-cereal.el")))
-   #+end_src
+Put =ob-cereal.el= on your =load-path= and require it:
 
-2. Run in terminal:
-
-   #+begin_src sh
-   doom sync -u
-   doom sync --rebuild
-   #+end_src
-
-3. Restart Emacs completely (not just =doom/reload=).
-
-4. In =~/.doom.d/config.el=, add:
-
-   #+begin_src emacs-lisp
-   (after! org
-     (require 'ob-cereal)
-     (org-babel-do-load-languages
-      'org-babel-load-languages
-      '((cereal . t)
-        ;; you probably also want your Forth language
-        (forth . t))))
-   #+end_src
-
-5. Run =doom sync= again, restart Emacs.
-
-6. Verify:
-
-   - =M-x eval-expression RET (featurep 'ob-cereal) RET= → should return =t=
-   - =M-x eval-expression RET (fboundp 'org-babel-execute:cereal) RET= → =t=
-
-** Vanilla Emacs (without Doom)
-
-Add to your init file (~/.emacs.d/init.el or ~/.emacs):
-
-#+begin_src emacs-lisp
-(add-to-list 'load-path "/path/to/your/ob-cereal-folder")
+#+BEGIN_SRC emacs-lisp
+(add-to-list 'load-path "/path/to/ob-cereal")
 (require 'ob-cereal)
-(org-babel-do-load-languages
- 'org-babel-load-languages
- '((cereal . t)))
-#+end_src
-
-* Quick start – ZeptoForth example (macOS)
-
-Find your port first:
-
-- macOS → usually  =/dev/cu.usbmodem*= ( =/dev/cu.usbmodem31401= )
-- Linux → =/dev/ttyUSB0=, =/dev/ttyACM0=, etc.
-
-Basic block:
-
-~#+BEGIN_SRC cereal :port /dev/cu.usbmodem31401 :speed 115200 :parity none :flowcontrol none~
-#+BEGIN_SRC cereal :port /dev/cu.usbmodem31401 :speed 115200 :parity none :flowcontrol none
-: STAR ( -- ) 42 EMIT ;
-: STARS ( n -- ) 0 DO STAR SPACE LOOP ;
-7 stars
 #+END_SRC
-~#+END_SRC~
 
-RESULTS:
-: : STAR ( -- ) 42 EMIT ;  ok
-: : STARS ( n -- ) 0 DO STAR SPACE LOOP ;  ok
-: 7 stars * * * * * * *  ok
+Requiring the file defines =org-babel-execute:cereal=, which is all Org needs to
+evaluate =cereal= blocks. If your setup gates languages through
+=org-babel-load-languages=, add =(cereal . t)= there as well.
 
+* Usage
 
+Set the port and speed as header arguments; put REPL input in the body:
 
-* Recommended header args (Mac)
+#+BEGIN_SRC org
+,#+BEGIN_SRC cereal :port /dev/cu.usbmodem31401 :speed 115200
+armv6m import
+: interp-delay ( -- )
+  [inlined]
+  code[
+  $E7FF h,
+  $E7FF h,
+  $E7FF h,
+  ]code
+;
+see interp-delay
+,#+END_SRC
+#+END_SRC
 
-| Argument      | Typical value              | Meaning / Notes                                 |
-|---------------|----------------------------|-------------------------------------------------|
-| :port         | /dev/cu.usbmodem*          | Required. Use quotes if name has spaces         |
-| :speed        | 115200                     | Baud rate (number, not string)                  |
-| :bytesize     | 8                          | Usually 8                                       |
-| :parity       | none / odd / even          | Usually none                                    |
-| :stopbits     | 1                          | Usually 1                                       |
-| :flowcontrol  | none / hw / sw             | Usually none (must have value!)                 |
-| :timeout      | 2                          | Seconds to wait for reply                       |
-| :lineend      | \n                         | Sent after body (default)                       |
-| :ienc         | raw / hex                  | Input encoding (rarely needed)                  |
-| :oenc         | raw / hex / HEX            | Output decoding (rarely needed)                 |
+Evaluating the block sends those lines to the device and captures the reply,
+including zeptoforth's disassembly of the word you just defined:
 
-Important: always give =:flowcontrol= a value (usually =none=). Leaving it blank causes parsing bugs.
+#+BEGIN_EXAMPLE
+20018E36 B500:      interp-delay:         PUSH {LR}
+20018E38 E7FF:                            B 1F <$20018E3A>
+20018E3A E7FF:      1:                    B 2F <$20018E3C>
+20018E3C E7FF:      2:                    B 3F <$20018E3E>
+20018E3E BD00:      3:                    POP {PC}
+ ok
+#+END_EXAMPLE
 
-* Troubleshooting / Gotchas
+* Header arguments
 
-- **Port not found**
-  - macOS: =ls /dev/cu.*=
-  - Linux: =ls /dev/ttyUSB* /dev/ttyACM*=
-  - Use quotes if path has special characters.
+| Argument       | Default        | Meaning                                              |
+|----------------+----------------+------------------------------------------------------|
+| =:port=        | =/dev/ttyUSB0= | Serial device path                                   |
+| =:speed=       | =115200=       | Baud rate                                            |
+| =:bytesize=    | =8=            | Data bits                                            |
+| =:parity=      | =nil=          | =odd= or =even=; anything else means no parity       |
+| =:stopbits=    | =1=            | Stop bits                                            |
+| =:flowcontrol= | =nil=          | =hw= or =sw=; anything else means none               |
+| =:timeout=     | =2=            | Seconds to read replies before closing               |
+| =:lineend=     | =\n=           | Appended to the body before sending                  |
+| =:ienc=        | =raw=          | =hex=: read the body as whitespace-separated hex     |
+|                |                | bytes and send the raw bytes                         |
+| =:oenc=        | =raw=          | =hex= / =HEX=: return received bytes as hex          |
 
-- **Doom sync does nothing**
-  - Make sure the repo URL in packages.el is correct and public (or you have auth set up).
+Set project-wide defaults with =org-babel-default-header-args:cereal=.
 
-* Bus Pirate example (still useful from ob-uart.el)
+* Caveats
 
-(kept from original README – works with the fixed version)
+- *No persistent session.* Every evaluation opens and closes the port. Whether
+  the /device's/ state survives between blocks is up to the device: opening a
+  USB-CDC port on an RP2040 does not reset it, so definitions persist — but that
+  is the target's behavior, not something ob-cereal maintains.
+- *Every block waits out =:timeout=.* The read loop has no early exit on a
+  prompt, so a block takes roughly =:timeout= seconds regardless of how quickly
+  the reply arrives. Lower =:timeout= for snappier interaction; raise it for slow
+  or chatty operations.
+- *Control characters are stripped* from results; newlines and tabs are kept.
+- *A numeric argument that parses to 0 falls back to its default* (=:timeout 0=
+  becomes 2). This is a quirk of the number coercion, not an intended feature.
 
-- set mode to I²C, 50 kHz
-  #+BEGIN_SRC cereal :port /dev/buspirate :speed 115200 :exports both
-  m 4 2
-  #+END_SRC
+* Credit and license
 
-- enable power & pull-ups
-  #+BEGIN_SRC cereal :port /dev/buspirate :speed 115200
-  WP
-  #+END_SRC
-
-- etc. (see original examples for SHT21 readout)
-
-* Why literate Forth + serial is powerful
-
-You can now:
-
-- Keep command sequences + explanations + results in one document
-- Version control your entire hardware conversation
-
-Enjoy — and happy hacking!
-
-* License
-
-Same as original: GPLv3+
+Fork of =ob-uart= by Andreas Müller. Revised by elemb. GPLv3 — see the header in
+=ob-cereal.el=.
