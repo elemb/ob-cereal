@@ -107,52 +107,57 @@
     (when (get-process proc-name)   (delete-process proc-name))
     (when (get-buffer proc-buf)     (kill-buffer proc-buf))
 
-    (condition-case err
-        (let ((proc (make-serial-process
-                     :name proc-name
-                     :buffer proc-buf
-                     :port port
-                     :speed speed
-                     :bytesize bytesize
-                     :parity parity
-                     :stopbits stopbits
-                     :flowcontrol flowcontrol)))
+    (let (proc result)
+      (condition-case err
+          (unwind-protect
+              (progn
+                (setq proc (make-serial-process
+                            :name proc-name
+                            :buffer proc-buf
+                            :port port
+                            :speed speed
+                            :bytesize bytesize
+                            :parity parity
+                            :stopbits stopbits
+                            :flowcontrol flowcontrol))
 
-          ;; Encode input if hex mode
-          (let ((encoded-body body))
-            (when (string= ienc "hex")
-              (setq encoded-body
-                    (mapconcat (lambda (hex) (char-to-string (string-to-number hex 16)))
-                               (split-string body "[ \t\n]+" t) "")))
+                ;; Encode input if hex mode
+                (let ((encoded-body body))
+                  (when (string= ienc "hex")
+                    (setq encoded-body
+                          (mapconcat (lambda (hex) (char-to-string (string-to-number hex 16)))
+                                     (split-string body "[ \t\n]+" t) "")))
 
-            ;; Send
-            (process-send-string proc (concat encoded-body lineend))
+                  ;; Send
+                  (process-send-string proc (concat encoded-body lineend))
 
-            ;; Wait (non-blocking)
-            (let ((start (float-time)) (elapsed 0))
-              (while (and (< elapsed timeout) (process-live-p proc))
-                (accept-process-output proc 0.1 nil t)
-                (setq elapsed (- (float-time) start))))
+                  ;; Wait (non-blocking)
+                  (let ((start (float-time)) (elapsed 0))
+                    (while (and (< elapsed timeout) (process-live-p proc))
+                      (accept-process-output proc 0.1 nil t)
+                      (setq elapsed (- (float-time) start))))
 
-            ;; Capture & clean result
-            (let ((result (with-current-buffer proc-buf (buffer-string))))
-              ;; Clean up
-              (when (process-live-p proc) (delete-process proc))
-              (when (get-buffer proc-buf) (kill-buffer proc-buf))
+                  ;; Capture result
+                  (setq result (with-current-buffer proc-buf (buffer-string)))
 
-              ;; Strip control chars (keep \n and \t)
-              (setq result (replace-regexp-in-string "[\x00-\x08\x0B-\x1F\x7F]" "" result))
+                  ;; Strip control chars (keep \n and \t)
+                  (setq result (replace-regexp-in-string "[\x00-\x08\x0B-\x1F\x7F]" "" result))
 
-              ;; Optional hex output decoding
-              (cond
-               ((string= oenc "hex")
-                (setq result (mapconcat (lambda (c) (format "%02x" c)) result " ")))
-               ((string= oenc "HEX")
-                (setq result (mapconcat (lambda (c) (format "%02X" c)) result " "))))
+                  ;; Optional hex output decoding
+                  (cond
+                   ((string= oenc "hex")
+                    (setq result (mapconcat (lambda (c) (format "%02x" c)) result " ")))
+                   ((string= oenc "HEX")
+                    (setq result (mapconcat (lambda (c) (format "%02X" c)) result " "))))))
 
-              result)))
+            ;; Cleanup always runs, success or error, because this is
+            ;; the unwind-protect's cleanup form, not the body's tail.
+            (when (and proc (process-live-p proc)) (delete-process proc))
+            (when (get-buffer proc-buf) (kill-buffer proc-buf)))
 
-      (error (format "Error in serial communication: %s" (error-message-string err))))))
+        (error (setq result (format "Error in serial communication: %s" (error-message-string err)))))
+
+      result)))
 
 (provide 'ob-cereal)
 ;;; ob-cereal.el ends here
